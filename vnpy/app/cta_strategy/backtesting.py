@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Callable
+from typing import Callable, Sequence
 from itertools import product
 from functools import lru_cache
 from time import time
@@ -227,6 +227,7 @@ class BacktestingEngine:
         start = self.start
         end = self.start + progress_delta
         progress = 0
+        self.output(f"数据模式: {self.mode}")
 
         while start < self.end:
             end = min(end, self.end)  # Make sure end time stays within set range
@@ -891,6 +892,14 @@ class BacktestingEngine:
         """"""
         self.days = days
         self.callback = callback
+
+    def save_tick(self, datas: Sequence[TickData]):
+        """"""
+        database_manager.save_tick_data(datas)
+
+    def save_bar(self, datas: Sequence[BarData]):
+        """"""
+        database_manager.save_bar_data(datas)
 
     def send_order(
         self,
