@@ -122,6 +122,8 @@ class Exchange(Enum):
     # Special Function
     LOCAL = "LOCAL"         # For local generated data
 
+    LOOPRING = "LOOPRING"
+
 
 class Currency(Enum):
     """
