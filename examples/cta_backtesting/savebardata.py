@@ -29,7 +29,7 @@ if __name__ == "__main__":
     file_list = os.listdir(data_dir)
     file_list.sort()
 
-    start_time = datetime(2018, 1, 1) + timedelta(hours=1)
+    start_time = datetime(2018, 1, 1) + timedelta(minutes=1)
     start_time_set = True
     open_price_set = False
     open_price = "0"
@@ -62,17 +62,20 @@ if __name__ == "__main__":
                     if spline[0] == "time":
                         continue
                     sptime = spline[0].replace("T", " ")
-                    sptimeT = sptime.replace("+00:00", "")
+                    sptime2 = sptime.replace("+00:00", "")
+                    sptimeT = sptime2[0:19]
                     print(f"sptimeT is: {sptimeT}")
                     print(f"start_time is: {start_time}")
-                    try:
-                        if datetime.strptime(sptimeT, "%Y-%m-%d %H:%M:%S.%f") >= start_time:
+                    cur_time = datetime.strptime(sptimeT, "%Y-%m-%d %H:%M:%S")
+                    temp_time = start_time
+                    if cur_time >= temp_time:
+                        while cur_time >= temp_time:
                             if volume > "0":
                                 bar = BarData(
                                     symbol="LRC_ETH",
                                     exchange=Exchange.BINANCE,
-                                    datetime=start_time - timedelta(hours=1),
-                                    interval=Interval.HOUR,
+                                    datetime=temp_time - timedelta(minutes=1),
+                                    interval=Interval.MINUTE,
                                     volume=volume,
                                     open_price=open_price,
                                     close_price=close_price,
@@ -84,8 +87,8 @@ if __name__ == "__main__":
                                 bar = BarData(
                                     symbol="LRC_ETH",
                                     exchange=Exchange.BINANCE,
-                                    datetime=start_time - timedelta(hours=1),
-                                    interval=Interval.HOUR,
+                                    datetime=temp_time - timedelta(minutes=1),
+                                    interval=Interval.MINUTE,
                                     volume=volume,
                                     open_price=close_price,
                                     close_price=close_price,
@@ -93,37 +96,37 @@ if __name__ == "__main__":
                                     low_price=close_price,
                                     gateway_name="RQ"
                                 )
+                            temp_time = temp_time + timedelta(minutes=1)
                             print(f"bar: {bar}")
                             data.append(bar)
                             # reset value
-                            open_price = "0"
+                            close_price = open_price
                             high_price = "0"
                             low_price = "0"
                             volume = "0"
-                            open_price_set = False
-                            start_time = start_time + timedelta(hours=1)
-                            all_write = True
+                        open_price = "0"
+                        open_price_set = False
+                        start_time = temp_time
+                        all_write = True
 
-                        if not open_price_set:
-                            open_price = spline[2]
-                            low_price = spline[2]
-                            open_price_set = True
-                        close_price = spline[2]
-                        if spline[2] > high_price:
-                            high_price = spline[2]
-                        if spline[2] < low_price:
-                            low_price = spline[2]
-                        volume = str(float(volume) + float(spline[4]))
-                        all_write = False
-                    except ValueError:
-                        print(f"exception: {ValueError}")
+                    if not open_price_set:
+                        open_price = spline[2]
+                        low_price = spline[2]
+                        open_price_set = True
+                    close_price = spline[2]
+                    if spline[2] > high_price:
+                        high_price = spline[2]
+                    if spline[2] < low_price:
+                        low_price = spline[2]
+                    volume = str(float(volume) + float(spline[4]))
+                    all_write = False
             if not all_write:
                 if volume > "0":
                     bar = BarData(
                         symbol="LRC_ETH",
                         exchange=Exchange.BINANCE,
-                        datetime=start_time - timedelta(hours=1),
-                        interval=Interval.HOUR,
+                        datetime=start_time - timedelta(minutes=1),
+                        interval=Interval.MINUTE,
                         volume=volume,
                         open_price=open_price,
                         close_price=close_price,
@@ -135,8 +138,8 @@ if __name__ == "__main__":
                     bar = BarData(
                         symbol="LRC_ETH",
                         exchange=Exchange.BINANCE,
-                        datetime=start_time - timedelta(hours=1),
-                        interval=Interval.HOUR,
+                        datetime=start_time - timedelta(minutes=1),
+                        interval=Interval.MINUTE,
                         volume=volume,
                         open_price=close_price,
                         close_price=close_price,
