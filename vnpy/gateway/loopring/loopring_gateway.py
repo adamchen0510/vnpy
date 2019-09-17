@@ -39,8 +39,8 @@ from vnpy.event import Event
 
 
 REST_HOST = "http://13.231.113.1:31610"
-WEBSOCKET_TRADE_HOST = "wss://stream.loopring.com:9443/ws/"
-WEBSOCKET_DATA_HOST = "wss://stream.loopring.com:9443/stream?streams="
+WEBSOCKET_TRADE_HOST = "http://13.231.113.1:31610/v1/ws"
+WEBSOCKET_DATA_HOST = "http://13.231.113.1:31610/v1/ws"
 
 STATUS_LOOPRING2VT = {
     "NEW": Status.NOTTRADED,
@@ -194,6 +194,7 @@ class LoopringRestApi(RestClient):
         """
         Generate LOOPRING signature.
         """
+        self.gateway.write_log("call sign")
         security = request.data["security"]
         if security == Security.NONE:
             request.data = None
@@ -268,9 +269,9 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("start query_time")
         self.query_time()
         #self.query_order()
-        self.gateway.write_log("start query_contract()")
+        self.gateway.write_log("start query_contract")
         self.query_contract()
-        self.gateway.write_log("start query account")
+        self.gateway.write_log("start query_account")
         self.query_account()
         #self.start_user_stream()
 
@@ -292,7 +293,7 @@ class LoopringRestApi(RestClient):
 
     def query_account(self):
         """"""
-        data = {"security": Security.SIGNED}
+        data = {"security": Security.NONE}
 
         param = {
             "address": self.address
@@ -306,14 +307,46 @@ class LoopringRestApi(RestClient):
             data=data
         )
 
+    def query_balance(self):
+        """"""
+        data = {"security": Security.NONE}
+
+        param = {
+            "accountId": self.accountId
+        }
+
+        self.add_request(
+            method="GET",
+            path="/api/v1/user/balances",
+            callback=self.on_query_balance,
+            params=param,
+            data=data
+        )
+
     def query_order(self):
         """"""
         data = {"security": Security.SIGNED}
 
         self.add_request(
             method="GET",
-            path="/api/v3/openOrders",
+            path="/api/v1/order",
             callback=self.on_query_order,
+            data=data
+        )
+
+    def query_orders(self):
+        """"""
+        data = {"security": Security.NONE}
+
+        params = {
+            "accountId": self.accountId
+        }
+
+        self.add_request(
+            method="GET",
+            path="/api/v1/orders",
+            callback=self.on_query_orders,
+            params=params,
             data=data
         )
 
@@ -341,6 +374,7 @@ class LoopringRestApi(RestClient):
 
     def send_order(self, req: OrderRequest):
         """"""
+        self.gateway.write_log("send_order")
         orderid = str(self.connect_time + self._new_order_id())
         order = req.create_order_data(
             orderid,
@@ -436,13 +470,15 @@ class LoopringRestApi(RestClient):
 
     def on_query_time(self, data, request):
         """"""
+        self.gateway.write_log("on_query_time:")
+        self.gateway.write_log(data)
         local_time = int(time.time() * 1000)
         server_time = int(data["timestamp"])
         self.time_offset = local_time - server_time
-        self.gateway.write_log("get server time")
 
     def on_query_account(self, data, request):
         """"""
+        self.gateway.write_log("on_query_account")
         self.gateway.write_log(data)
         '''
         for account_data in data["balances"]:
@@ -456,13 +492,34 @@ class LoopringRestApi(RestClient):
             if account.balance:
                 self.gateway.on_account(account)
         '''
-        for account_data in data['account']:
-            self.accountId = account_data['accountId']
-            self.publicKeyX = account_data['publicKeyX']
-            self.publicKeyY = account_data['publicKeyY']
+        account_data = data['account']
+        self.accountId = account_data['accountId']
+        self.publicKeyX = account_data['publicKeyX']
+        self.publicKeyY = account_data['publicKeyY']
+        self.key = account_data['apiKey']
 
 
         self.gateway.write_log("账户信息查询成功")
+
+        self.gateway.write_log("start query_balance")
+        self.query_balance()
+
+        self.gateway.write_log("start query_orders")
+        self.query_orders()
+
+    def on_query_balance(self, data, request):
+        self.gateway.write_log("on_query_balance")
+        self.gateway.write_log(data)
+
+        for balance in data['balances']:
+            accountId = balance['accountId']
+            tokenId = balance['tokenId']
+            tokenAmount = balance['totalAmount']
+            frozenAmount = balance['frozenAmount']
+
+            #self.gateway.on_account(balance)
+
+        self.gateway.write_log("账户余额查询成功")
 
     def on_query_order(self, data, request):
         """"""
@@ -487,8 +544,20 @@ class LoopringRestApi(RestClient):
 
         self.gateway.write_log("委托信息查询成功")
 
+    def on_query_orders(self, data, request):
+        self.gateway.write_log("on_query_orders")
+        self.gateway.write_log(data)
+
+        for order in data['orders']:
+            hash = order['hash']
+            side = order['side']
+            market = order['market']
+
+        self.gateway.write_log("所有Orders查询成功")
+
     def on_query_contract(self, data, request):
         """"""
+        self.gateway.write_log("on_query_contract:")
         self.gateway.write_log(data)
         for d in data["tokens"]:
 
@@ -512,6 +581,8 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("合约信息查询成功")
 
     def on_send_order(self, data, request):
+        self.gateway.write_log("on_send_order")
+        self.gateway.write_log(data)
         """"""
         pass
 
