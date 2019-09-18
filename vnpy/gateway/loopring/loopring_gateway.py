@@ -6,6 +6,7 @@ import urllib
 import hashlib
 import hmac
 import time
+import json
 from copy import copy
 from datetime import datetime, timedelta
 from enum import Enum
@@ -37,10 +38,13 @@ from vnpy.trader.object import (
 from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event
 
+from ethsnarks.eddsa import PureEdDSA
+from ethsnarks.field import FQ
+
 
 REST_HOST = "http://13.231.113.1:31610"
-WEBSOCKET_TRADE_HOST = "http://13.231.113.1:31610/v1/ws"
-WEBSOCKET_DATA_HOST = "http://13.231.113.1:31610/v1/ws"
+WEBSOCKET_TRADE_HOST = "ws://13.231.113.1:31610/v1/ws"
+WEBSOCKET_DATA_HOST = "ws://13.231.113.1:31610/v1/ws"
 
 STATUS_LOOPRING2VT = {
     "NEW": Status.NOTTRADED,
@@ -186,15 +190,19 @@ class LoopringRestApi(RestClient):
         self.address = ""
         self.publicKeyX = ""
         self.publicKeyY = ""
-        self.lrcTokenId = ""
+        self.lrcTokenId = 2
         self.ethTokenId = ""
         self.accountId = 0
+
+        self.orderHash = []
 
     def sign(self, request):
         """
         Generate LOOPRING signature.
         """
+        return request
         self.gateway.write_log("call sign")
+        self.gateway.write_log(request)
         security = request.data["security"]
         if security == Security.NONE:
             request.data = None
@@ -274,6 +282,8 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("start query_account")
         self.query_account()
         #self.start_user_stream()
+        #self.gateway.write_log("trade_ws_api connect")
+        #self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
 
     def query_time(self):
         """"""
@@ -382,31 +392,95 @@ class LoopringRestApi(RestClient):
         )
         self.gateway.on_order(order)
 
-        data = {
-            "security": Security.SIGNED
+        exchangeId = 1
+        orderId = 7
+
+        validSince = int(time.time()*1000)
+        validUntil = validSince + 24 * 60 * 60 * 1000
+        maxFeeBips = 20
+        allOrNone = 1
+        buy = 1
+
+        msg_parts = [
+            FQ(int(exchangeId), 1 << 32), FQ(int(orderId), 1 << 20),
+            FQ(int(self.accountId), 1 << 20),
+            FQ(int(self.publicKeyY), 1 << 254), FQ(int(self.publicKeyY), 1 << 254),
+            FQ(int(self.lrcTokenId), 1 << 8), FQ(int(self.lrcTokenId), 1 << 8),
+            FQ(int(req.volume), 1 << 96), FQ(int(req.volume), 1 << 96),
+            FQ(int(allOrNone), 1 << 1), FQ(int(validSince), 1 << 32), FQ(int(validUntil), 1 << 32),
+            FQ(int(maxFeeBips), 1 << 6),
+            FQ(int(buy), 1 << 1)
+        ]
+        message = PureEdDSA.to_bits(*msg_parts)
+
+        self.gateway.write_log(int(self.secret))
+        signedMessage = PureEdDSA.sign(message, FQ(int(self.secret)))
+
+        hash = PureEdDSA().hash_public(signedMessage.sig.R, signedMessage.A, signedMessage.msg)
+
+        msg = {
+            "exchangeId": exchangeId,
+            "orderId": orderId,
+            "accountId": self.accountId,
+            "tokenSId": 0,
+            "tokenBId": self.lrcTokenId,
+            "amountS": "100000000000000000",
+            "amountB": "100000000000000000000",
+            "hash": str(hash),
+            "maxFeeBips": maxFeeBips,
+            "validSince": validSince,
+            "validUntil": validUntil,
+            "dualAuthPubKeyX": str(self.publicKeyX),
+            "dualAuthPubKeyY": str(self.publicKeyY),
+            "dualAuthPrivKey": str(self.publicKeyY),
+            "tradingPubKeyX": str(self.publicKeyX),
+            "tradingPubKeyY": str(self.publicKeyY),
+            "tradingSigRx": str(signedMessage.sig.R.x),
+            "tradingSigRy": str(signedMessage.sig.R.y),
+            "tradingSigS": str(signedMessage.sig.s),
+            "clientOrderId": ""
         }
 
-        params = {
+        '''
+        msg = {
             "exchangeId": 1,
-            "orderId":0,
-            "tokenBId": self.lrcTokenId,
-            "symbol": req.symbol,
-            "timeInForce": "GTC",
-            "side": DIRECTION_VT2LOOPRING[req.direction],
-            "type": ORDERTYPE_VT2LOOPRING[req.type],
-            "price": str(req.price),
-            "amountB": str(req.volume),
-            "newClientOrderId": orderid,
-            "newOrderRespType": "ACK"
+            "orderId": 0,
+            "accountId": 100,
+            "tokenSId": 2,
+            "tokenBId": 0,
+            "amountS": "150000000000000000000",
+            "amountB": "10000000000000000",
+            "hash": "14504358714580556901944011952143357684927684879578923674101657902115012783290",
+            "maxFeeBips": 20,
+            "validSince": 1567052201,
+            "validUntil": 1569645201,
+            "dualAuthPubKeyX": "3361199864829102879089761359041084639986510274234372880847316559184665065303",
+            "dualAuthPubKeyY": "9171799468103969055304541734277260692003757276767513327577616030089521138017",
+            "dualAuthPrivKey": "47371961212603178341706",
+            "tradingPubKeyX": "16309728762011835354894444201372057648592320986680190035881441620421033294098",
+            "tradingPubKeyY": "20132776233802896271927059541627812930965780555542811823387317755220841280391",
+            "tradingSigRx": "15179969700843231746888635151106024191752286977677731880613780154804077177446",
+            "tradingSigRy": "8103765835373541952843207933665617916816772340145691265012430975846006955894",
+            "tradingSigS": "4462707474665244243174020779004308974607763640730341744048308145656189589982",
+            "clientOrderId": ""
+        }
+        '''
+
+
+        self.gateway.write_log(msg)
+
+        headers = {
+            "Content-Type": "application/json"
         }
 
         self.add_request(
             method="POST",
             path="/api/v1/order",
             callback=self.on_send_order,
-            data=data,
-            params=params,
-            extra=order,
+            data=json.dumps(msg),
+            #params=params,
+            headers=headers,
+            #extra=order,
             on_error=self.on_send_order_error,
             on_failed=self.on_send_order_failed
         )
@@ -434,14 +508,15 @@ class LoopringRestApi(RestClient):
         )
 
     def start_user_stream(self):
+        self.gateway.write_log("start_user_stream")
         """"""
         data = {
-            "security": Security.API_KEY
+            "security": Security.NONE
         }
 
         self.add_request(
             method="POST",
-            path="/api/v1/userDataStream",
+            path="/api/v1/stream",
             callback=self.on_start_user_stream,
             data=data
         )
@@ -583,6 +658,8 @@ class LoopringRestApi(RestClient):
     def on_send_order(self, data, request):
         self.gateway.write_log("on_send_order")
         self.gateway.write_log(data)
+
+        self.orderHash.append(data['orderHash'])
         """"""
         pass
 
@@ -590,9 +667,14 @@ class LoopringRestApi(RestClient):
         """
         Callback when sending order failed on server.
         """
+        self.gateway.write_log("on_send_order_failed")
+        self.gateway.write_log(status_code)
+        self.gateway.write_log(request)
+        '''
         order = request.extra
         order.status = Status.REJECTED
         self.gateway.on_order(order)
+        '''
 
         msg = f"委托失败，状态码：{status_code}，信息：{request.response.text}"
         self.gateway.write_log(msg)
@@ -603,6 +685,9 @@ class LoopringRestApi(RestClient):
         """
         Callback when sending order caused exception.
         """
+        self.gateway.write_log("on_send_order_error")
+        self.gateway.write_log(exception_value)
+        self.gateway.write_log(request)
         order = request.extra
         order.status = Status.REJECTED
         self.gateway.on_order(order)
@@ -616,6 +701,8 @@ class LoopringRestApi(RestClient):
         pass
 
     def on_start_user_stream(self, data, request):
+        self.gateway.write_log("on_start_user_stream")
+        self.gateway.write_log(data)
         """"""
         self.user_stream_key = data["listenKey"]
         self.keep_alive_count = 0
@@ -724,7 +811,12 @@ class LoopringTradeWebsocketApi(WebsocketClient):
         self.gateway.write_log("交易Websocket API连接成功")
 
     def on_packet(self, packet: dict):  # type: (dict)->None
+        self.gateway.write_log("交易on_packet")
+        self.gateway.write_log(packet)
         """"""
+        if packet == "ping":
+            return
+
         if packet["e"] == "outboundAccountInfo":
             self.on_account(packet)
         else:
@@ -744,6 +836,8 @@ class LoopringTradeWebsocketApi(WebsocketClient):
                 self.gateway.on_account(account)
 
     def on_order(self, packet: dict):
+        self.gateway.write_log("交易on_order")
+        self.gateway.write_log(packet)
         """"""
         dt = datetime.fromtimestamp(packet["O"] / 1000)
         time = dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -808,16 +902,22 @@ class LoopringDataWebsocketApi(WebsocketClient):
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
 
+        url = WEBSOCKET_DATA_HOST
+        self.init(url, self.proxy_host, self.proxy_port)
+        self.start()
+
     def on_connected(self):
         """"""
         self.gateway.write_log("行情Websocket API连接刷新")
 
     def subscribe(self, req: SubscribeRequest):
+        self.gateway.write_log("LoopringDataWebsocketApi subscribe")
         """"""
+        '''
         if req.symbol not in symbol_name_map:
             self.gateway.write_log(f"找不到该合约代码{req.symbol}")
             return
-
+        
         # Create tick buf data
         tick = TickData(
             symbol=req.symbol,
@@ -827,6 +927,7 @@ class LoopringDataWebsocketApi(WebsocketClient):
             gateway_name=self.gateway_name,
         )
         self.ticks[req.symbol.lower()] = tick
+        '''
 
         # Close previous connection
         if self._active:
@@ -835,16 +936,25 @@ class LoopringDataWebsocketApi(WebsocketClient):
 
         # Create new connection
         channels = []
+        '''
         for ws_symbol in self.ticks.keys():
             channels.append(ws_symbol + "@ticker")
             channels.append(ws_symbol + "@depth5")
+        '''
+
+        channels.append("'op': 'sub', 'args': ['kline&LRC-BTC&1Hour', 'depth&LRC-BTC&1', 'depth10&LRC-BTC&1', "
+                        "'trade&LRC-BTC', 'ticker&LRC-BTC']}")
 
         url = WEBSOCKET_DATA_HOST + "/".join(channels)
         self.init(url, self.proxy_host, self.proxy_port)
         self.start()
 
     def on_packet(self, packet):
+        self.gateway.write_log("行情on_packet")
+        self.gateway.write_log(packet)
         """"""
+        if packet == "ping":
+            return
         stream = packet["stream"]
         data = packet["data"]
 

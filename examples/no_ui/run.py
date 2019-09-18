@@ -5,7 +5,7 @@ from logging import INFO
 
 from vnpy.event import EventEngine
 from vnpy.trader.constant import Exchange, Direction, OrderType
-from vnpy.trader.object import OrderRequest, CancelRequest
+from vnpy.trader.object import OrderRequest, CancelRequest, SubscribeRequest
 from vnpy.trader.setting import SETTINGS
 from vnpy.trader.engine import MainEngine
 
@@ -19,12 +19,12 @@ SETTINGS["log.level"] = INFO
 SETTINGS["log.console"] = True
 
 loopring_setting = {
-    "key": "ZkFS34He1tydFuEcbMI6ksIA4dtqU0ykycI30abtRxkST4VfexIgC4HE3qAuZkHk",
-    "secret": "ZkFS34He1tydFuEcbMI6ksIA4dtqU0ykycI30abtRxkST4VfexIgC4HE3qAuZkHk",
+    "key": "54U8wpB0ZjtZH0j10dRB7TeqDJ8UnxunsbdifZyuLQwcEZLhEVo3VI4JT505zReV",
+    "secret": "1872535890",
     "session_number": 3,
     "address": "0x6b1029C9AE8Aa5EEA9e045E8ba3C93d380D5BDDa",
-    "publcKeyX": "3032555699718739012655427019400670474592707110122712334121787061261787356949",
-    "publicKeyY": "8244750709992907884325487047280458849269091060072411733281953316881705670521",
+    "publcKeyX": "6674145034343560865324539436548640798922427529843778417647310928128880527219",
+    "publicKeyY": "20475747943702752787633047864876878209331810697711316824740281085816304497780",
     "accountId": 7,
     "ETHTokenId": 0,
     "LRCTokenId": 2
@@ -71,31 +71,36 @@ def run_child():
     )
     main_engine.send_order(reqeust_order, "LOOPRING")
 
-    '''
+
     # cancel order
     cancel_order = CancelRequest(
         symbol="LRC-ETH",
         exchange=Exchange.LOOPRING,
-        orderid=""
+        orderid="0"
     )
     main_engine.cancel_order(cancel_order, "LOOPRING")
-    '''
     # main_engine.connect(binance_setting, "BINANCE")
     main_engine.write_log("连接CTP接口")
 
-    sleep(10)
+    sleep(5)
 
-    '''
+    req = SubscribeRequest(
+        symbol="LRC",
+        exchange=Exchange.LOOPRING
+    )
+    main_engine.subscribe(req, "LOOPRING")
+
+    sleep(5)
+
     cta_engine.init_engine()
     main_engine.write_log("CTA策略初始化完成")
 
     cta_engine.init_all_strategies()
-    sleep(60)   # Leave enough time to complete strategy initialization
+    sleep(5)   # Leave enough time to complete strategy initialization
     main_engine.write_log("CTA策略全部初始化")
 
     cta_engine.start_all_strategies()
     main_engine.write_log("CTA策略全部启动")
-    '''
 
     while True:
         sleep(1)
