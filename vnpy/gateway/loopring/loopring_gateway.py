@@ -195,6 +195,7 @@ class LoopringRestApi(RestClient):
         self.accountId = 0
 
         self.orderHash = []
+        self.orderId = [None] * 256
 
     def sign(self, request):
         """
@@ -276,11 +277,11 @@ class LoopringRestApi(RestClient):
 
         self.gateway.write_log("start query_time")
         self.query_time()
+        self.gateway.write_log("start query_account")
+        self.query_account()
         #self.query_order()
         self.gateway.write_log("start query_contract")
         self.query_contract()
-        self.gateway.write_log("start query_account")
-        self.query_account()
         #self.start_user_stream()
         #self.gateway.write_log("trade_ws_api connect")
         #self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
@@ -335,7 +336,7 @@ class LoopringRestApi(RestClient):
 
     def query_order(self):
         """"""
-        data = {"security": Security.SIGNED}
+        data = {"security": Security.NONE}
 
         self.add_request(
             method="GET",
@@ -393,7 +394,7 @@ class LoopringRestApi(RestClient):
         self.gateway.on_order(order)
 
         exchangeId = 1
-        orderId = 7
+        orderId = self.orderId[0]
 
         validSince = int(time.time()*1000)
         validUntil = validSince + 24 * 60 * 60 * 1000
@@ -489,22 +490,25 @@ class LoopringRestApi(RestClient):
 
     def cancel_order(self, req: CancelRequest):
         """"""
+        if len(self.orderHash) < 1:
+            self.gateway.write_log("There's no order to cancel")
+            return
+
         data = {
-            "security": Security.SIGNED
+            "security": Security.NONE
         }
 
         params = {
-            "symbol": req.symbol,
-            "origClientOrderId": req.orderid
+            "accountId": self.accountId,
+            "orderHash": self.orderHash[int(req.orderid)]
         }
 
         self.add_request(
             method="DELETE",
-            path="/api/v1/order",
+            path="/api/v1/orders",
             callback=self.on_cancel_order,
             params=params,
-            data=data,
-            extra=req
+            data=data
         )
 
     def start_user_stream(self):
@@ -596,6 +600,14 @@ class LoopringRestApi(RestClient):
 
         self.gateway.write_log("账户余额查询成功")
 
+    def on_query_orderId(self, data, request):
+        self.gateway.write_log("on_query_orderId")
+        self.gateway.write_log(data)
+        self.gateway.write_log(request)
+
+        tokenId = request.params['tokenId']
+        self.orderId[tokenId] = data['orderId']
+
     def on_query_order(self, data, request):
         """"""
         for d in data:
@@ -649,6 +661,7 @@ class LoopringRestApi(RestClient):
                 history_data=True,
                 gateway_name=self.gateway_name,
             )
+            self.query_orderId(d['tokenId'])
             self.gateway.on_contract(contract)
 
             symbol_name_map[contract.symbol] = contract.name
@@ -698,6 +711,8 @@ class LoopringRestApi(RestClient):
 
     def on_cancel_order(self, data, request):
         """"""
+        self.gateway.write_log("on_cancel_order")
+        self.gateway.write_log(data)
         pass
 
     def on_start_user_stream(self, data, request):
@@ -713,6 +728,19 @@ class LoopringRestApi(RestClient):
     def on_keep_user_stream(self, data, request):
         """"""
         pass
+
+    def query_orderId(self, tokenId):
+        """"""
+        params = {
+            "accountId": self.accountId,
+            "tokenId": tokenId
+        }
+        self.add_request(
+            method="GET",
+            path="/api/v1/orderId",
+            callback=self.on_query_orderId,
+            params=params
+        )
 
     def query_history(self, req: HistoryRequest):
         """"""
@@ -930,24 +958,31 @@ class LoopringDataWebsocketApi(WebsocketClient):
         '''
 
         # Close previous connection
-        if self._active:
-            self.stop()
-            self.join()
+        #if self._active:
+        #    self.stop()
+        #    self.join()
 
         # Create new connection
-        channels = []
+        channels = {
+            "op": "sub",
+            "args": [
+                # "kline&LRC-ETH&1Hour"
+                # ,"depth&LRC-ETH&1",
+                # ,"depth10&LRC-ETH&1"
+                # ,"trade&LRC-ETH",
+                "ticker&LRC-ETH"
+            ]
+        }
         '''
         for ws_symbol in self.ticks.keys():
             channels.append(ws_symbol + "@ticker")
             channels.append(ws_symbol + "@depth5")
         '''
 
-        channels.append("'op': 'sub', 'args': ['kline&LRC-BTC&1Hour', 'depth&LRC-BTC&1', 'depth10&LRC-BTC&1', "
-                        "'trade&LRC-BTC', 'ticker&LRC-BTC']}")
-
-        url = WEBSOCKET_DATA_HOST + "/".join(channels)
-        self.init(url, self.proxy_host, self.proxy_port)
-        self.start()
+        # url = WEBSOCKET_DATA_HOST
+        # self.init(url, self.proxy_host, self.proxy_port)
+        # self.start()
+        self.send_packet(channels)
 
     def on_packet(self, packet):
         self.gateway.write_log("行情on_packet")
@@ -955,6 +990,7 @@ class LoopringDataWebsocketApi(WebsocketClient):
         """"""
         if packet == "ping":
             return
+        '''
         stream = packet["stream"]
         data = packet["data"]
 
@@ -983,3 +1019,4 @@ class LoopringDataWebsocketApi(WebsocketClient):
 
         if tick.last_price:
             self.gateway.on_tick(copy(tick))
+        '''
