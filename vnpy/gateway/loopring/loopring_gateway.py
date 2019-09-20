@@ -47,11 +47,11 @@ WEBSOCKET_TRADE_HOST = "ws://13.231.113.1:31610/v1/ws"
 WEBSOCKET_DATA_HOST = "ws://13.231.113.1:31610/v1/ws"
 
 STATUS_LOOPRING2VT = {
-    "NEW": Status.NOTTRADED,
-    "PARTIALLY_FILLED": Status.PARTTRADED,
-    "FILLED": Status.ALLTRADED,
-    "CANCELED": Status.CANCELLED,
-    "REJECTED": Status.REJECTED
+    "ORDER_STATUS_PROCESSING": Status.NOTTRADED,
+    "ORDER_STATUS_PARTIALLY_FILLED": Status.PARTTRADED,
+    "ORDER_STATUS_FILLED": Status.ALLTRADED,
+    "ORDER_STATUS_CANCELED": Status.CANCELLED,
+    "ORDER_STATUS_REJECTED": Status.REJECTED
 }
 
 ORDERTYPE_VT2LOOPRING = {
@@ -479,7 +479,7 @@ class LoopringRestApi(RestClient):
             data=json.dumps(msg),
             #params=params,
             headers=headers,
-            #extra=order,
+            extra=order,
             on_error=self.on_send_order_error,
             on_failed=self.on_send_order_failed
         )
@@ -633,10 +633,20 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("on_query_orders")
         self.gateway.write_log(data)
 
-        for order in data['orders']:
-            hash = order['hash']
-            side = order['side']
-            market = order['market']
+        for d in data['orders']:
+            order = OrderData(
+                orderid=d["clientOrderId"],
+                symbol=d["market"],
+                exchange=Exchange.LOOPRING,
+                price=float(d["price"]),
+                volume=float(d["size"]),
+                type=OrderType.LIMIT,
+                direction=DIRECTION_LOOPRING2VT[d["side"]],
+                status=STATUS_LOOPRING2VT.get(d["status"], None),
+                time=d['timestamp'],
+                gateway_name=self.gateway_name,
+            )
+            self.gateway.on_order(order)
 
         self.gateway.write_log("所有Orders查询成功")
 
@@ -671,6 +681,10 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log(data)
 
         self.orderHash.append(data['orderHash'])
+
+        order = request.extra
+        order.status = Status.NOTTRADED
+        self.gateway.on_order(order)
         """"""
         pass
 
@@ -681,11 +695,9 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("on_send_order_failed")
         self.gateway.write_log(status_code)
         self.gateway.write_log(request)
-        '''
         order = request.extra
         order.status = Status.REJECTED
         self.gateway.on_order(order)
-        '''
 
         msg = f"委托失败，状态码：{status_code}，信息：{request.response.text}"
         self.gateway.write_log(msg)
