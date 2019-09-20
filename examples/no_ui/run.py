@@ -59,19 +59,23 @@ def run_child():
     main_engine.write_log("注册日志事件监听")
 
     main_engine.connect(loopring_setting, "LOOPRING")
-    sleep(5)
+    # main_engine.connect(binance_setting, "BINANCE")
+    main_engine.write_log("连接CTP接口")
+
+    '''
+    sleep(10)
     # send order
     reqeust_order = OrderRequest(
         symbol="LRC-ETH",
         exchange=Exchange.LOOPRING,
         direction=Direction.LONG,
         price=0.1,
-        volume=1.0,
+        volume=10,
         type=OrderType.LIMIT
     )
     main_engine.send_order(reqeust_order, "LOOPRING")
 
-
+    sleep(10)
     # cancel order
     cancel_order = CancelRequest(
         symbol="LRC-ETH",
@@ -79,11 +83,9 @@ def run_child():
         orderid="0"
     )
     main_engine.cancel_order(cancel_order, "LOOPRING")
-    # main_engine.connect(binance_setting, "BINANCE")
-    main_engine.write_log("连接CTP接口")
+    '''
 
     sleep(5)
-
     req = SubscribeRequest(
         symbol="LRC",
         exchange=Exchange.LOOPRING
