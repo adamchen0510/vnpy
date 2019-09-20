@@ -99,6 +99,7 @@ class LoopringGateway(BaseGateway):
         "session_number": 3,
         "proxy_host": "",
         "proxy_port": 0,
+        "address": "",
     }
 
     exchanges = [Exchange.LOOPRING]
@@ -304,8 +305,6 @@ class LoopringRestApi(RestClient):
 
     def query_account(self):
         """"""
-        data = {"security": Security.NONE}
-
         param = {
             "address": self.address
         }
@@ -314,8 +313,7 @@ class LoopringRestApi(RestClient):
             method="GET",
             path="/api/v1/account",
             callback=self.on_query_account,
-            params=param,
-            data=data
+            params=param
         )
 
     def query_balance(self):
@@ -405,7 +403,7 @@ class LoopringRestApi(RestClient):
         msg_parts = [
             FQ(int(exchangeId), 1 << 32), FQ(int(orderId), 1 << 20),
             FQ(int(self.accountId), 1 << 20),
-            FQ(int(self.publicKeyY), 1 << 254), FQ(int(self.publicKeyY), 1 << 254),
+            FQ(int(self.publicKeyX), 1 << 254), FQ(int(self.publicKeyY), 1 << 254),
             FQ(int(self.lrcTokenId), 1 << 8), FQ(int(self.lrcTokenId), 1 << 8),
             FQ(int(req.volume), 1 << 96), FQ(int(req.volume), 1 << 96),
             FQ(int(allOrNone), 1 << 1), FQ(int(validSince), 1 << 32), FQ(int(validUntil), 1 << 32),
