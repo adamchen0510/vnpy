@@ -50,8 +50,10 @@ STATUS_LOOPRING2VT = {
     "ORDER_STATUS_PROCESSING": Status.NOTTRADED,
     "ORDER_STATUS_PARTIALLY_FILLED": Status.PARTTRADED,
     "ORDER_STATUS_FILLED": Status.ALLTRADED,
+    "ORDER_STATUS_CANCELLING": Status.CANCELLING,
     "ORDER_STATUS_CANCELED": Status.CANCELLED,
-    "ORDER_STATUS_REJECTED": Status.REJECTED
+    "ORDER_STATUS_REJECTED": Status.REJECTED,
+    "ORDER_STATUS_EXPIRED": Status.EXPIRED
 }
 
 ORDERTYPE_VT2LOOPRING = {
@@ -196,7 +198,9 @@ class LoopringRestApi(RestClient):
         self.accountId = 0
 
         self.orderHash = []
-        self.orderId = [None] * 256
+        self.orderId = [None] * 256         #  As Nonce
+        self.clientOrderMap = {}
+        self.contracts = {}
 
     def sign(self, request):
         """
@@ -384,11 +388,19 @@ class LoopringRestApi(RestClient):
     def send_order(self, req: OrderRequest):
         """"""
         self.gateway.write_log("send_order")
+
+        self.gateway.write_log(req.symbol)
+        bsStr = req.symbol.split("-")
+        if bsStr[0] not in self.contracts or bsStr[1] not in self.contracts:
+            self.gateway.write_log("Market dont have " + req.symbol)
+            return
+
         orderid = str(self.connect_time + self._new_order_id())
         order = req.create_order_data(
             orderid,
             self.gateway_name
         )
+        self.gateway.write_log("orderis:" + orderid)
         self.gateway.on_order(order)
 
         exchangeId = 1
@@ -437,7 +449,7 @@ class LoopringRestApi(RestClient):
             "tradingSigRx": str(signedMessage.sig.R.x),
             "tradingSigRy": str(signedMessage.sig.R.y),
             "tradingSigS": str(signedMessage.sig.s),
-            "clientOrderId": ""
+            "clientOrderId": str(order.orderid)
         }
 
         '''
@@ -488,8 +500,8 @@ class LoopringRestApi(RestClient):
 
     def cancel_order(self, req: CancelRequest):
         """"""
-        if len(self.orderHash) < 1:
-            self.gateway.write_log("There's no order to cancel")
+        if req.orderid not in self.clientOrderMap:
+            self.gateway.write_log("There's no this order " + req.orderid + " to cancel")
             return
 
         data = {
@@ -498,7 +510,7 @@ class LoopringRestApi(RestClient):
 
         params = {
             "accountId": self.accountId,
-            "orderHash": self.orderHash[int(req.orderid)]
+            "orderHash": self.clientOrderMap[req.orderid]
         }
 
         self.add_request(
@@ -646,6 +658,7 @@ class LoopringRestApi(RestClient):
                 time=d['timestamp'],
                 gateway_name=self.gateway_name,
             )
+            self.clientOrderMap[d['clientOrderId']] = d['hash']
             self.gateway.on_order(order)
 
         self.gateway.write_log("所有Orders查询成功")
@@ -671,6 +684,7 @@ class LoopringRestApi(RestClient):
             )
             self.query_orderId(d['tokenId'])
             self.gateway.on_contract(contract)
+            self.contracts[d['symbol']] = contract
 
             symbol_name_map[contract.symbol] = contract.name
 
@@ -684,6 +698,7 @@ class LoopringRestApi(RestClient):
 
         order = request.extra
         order.status = Status.NOTTRADED
+        self.clientOrderMap[order.orderid] = data['orderHash']
         self.gateway.on_order(order)
         """"""
         pass

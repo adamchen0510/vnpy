@@ -33,7 +33,9 @@ class Status(Enum):
     NOTTRADED = "未成交"
     PARTTRADED = "部分成交"
     ALLTRADED = "全部成交"
+    CANCELLING = "撤销中"
     CANCELLED = "已撤销"
+    EXPIRED = "过期"
     REJECTED = "拒单"
 
 
