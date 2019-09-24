@@ -50,7 +50,7 @@ STATUS_LOOPRING2VT = {
     "ORDER_STATUS_PARTIALLY_FILLED": Status.PARTTRADED,
     "ORDER_STATUS_FILLED": Status.ALLTRADED,
     "ORDER_STATUS_CANCELLING": Status.CANCELLING,
-    "ORDER_STATUS_CANCELED": Status.CANCELLED,
+    "ORDER_STATUS_CANCELLED": Status.CANCELLED,
     "ORDER_STATUS_REJECTED": Status.REJECTED,
     "ORDER_STATUS_EXPIRED": Status.EXPIRED
 }
@@ -672,12 +672,14 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log(data)
 
         for d in data['orders']:
+            # TODO: use correct decimals to calc volume
+            volume = int(d["size"])/(10**18)
             order = OrderData(
                 orderid=d["clientOrderId"],
                 symbol=d["market"],
                 exchange=Exchange.LOOPRING,
                 price=float(d["price"]),
-                volume=float(d["size"]),
+                volume=volume,
                 type=OrderType.LIMIT,
                 direction=DIRECTION_LOOPRING2VT[d["side"]],
                 status=STATUS_LOOPRING2VT.get(d["status"], None),
@@ -722,7 +724,8 @@ class LoopringRestApi(RestClient):
         self.orderHash.append(data['orderHash'])
 
         # add token order Id
-        tokenSid = data['tokenSId']
+        jsonData = json.loads(request.data)
+        tokenSid = jsonData['tokenSId']
         if tokenSid in self.orderId:
             self.orderId[tokenSid] = self.orderId[tokenSid] + 1
 
