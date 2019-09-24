@@ -41,7 +41,6 @@ from vnpy.event import Event
 from ethsnarks.eddsa import PureEdDSA
 from ethsnarks.field import FQ
 
-
 REST_HOST = "http://13.231.113.1:31610"
 WEBSOCKET_TRADE_HOST = "ws://13.231.113.1:31610/v1/ws"
 WEBSOCKET_DATA_HOST = "ws://13.231.113.1:31610/v1/ws"
@@ -198,7 +197,7 @@ class LoopringRestApi(RestClient):
         self.accountId = 0
 
         self.orderHash = []
-        self.orderId = [None] * 256         #  As Nonce
+        self.orderId = [None] * 256  # As Nonce
         self.clientOrderMap = {}
         self.contracts = {}
 
@@ -254,13 +253,13 @@ class LoopringRestApi(RestClient):
         return request
 
     def connect(
-        self,
-        key: str,
-        secret: str,
-        session_number: int,
-        proxy_host: str,
-        proxy_port: int,
-        address: str
+            self,
+            key: str,
+            secret: str,
+            session_number: int,
+            proxy_host: str,
+            proxy_port: int,
+            address: str
     ):
         """
         Initialize connection to REST server.
@@ -272,7 +271,7 @@ class LoopringRestApi(RestClient):
         self.address = address
 
         self.connect_time = (
-            int(datetime.now().strftime("%y%m%d%H%M%S")) * self.order_count
+                int(datetime.now().strftime("%y%m%d%H%M%S")) * self.order_count
         )
 
         self.init(REST_HOST, proxy_host, proxy_port)
@@ -284,12 +283,12 @@ class LoopringRestApi(RestClient):
         self.query_time()
         self.gateway.write_log("start query_account")
         self.query_account()
-        #self.query_order()
+        # self.query_order()
         self.gateway.write_log("start query_contract")
         self.query_contract()
-        #self.start_user_stream()
-        #self.gateway.write_log("trade_ws_api connect")
-        #self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
+        # self.start_user_stream()
+        # self.gateway.write_log("trade_ws_api connect")
+        # self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
 
     def query_time(self):
         """"""
@@ -395,6 +394,31 @@ class LoopringRestApi(RestClient):
             self.gateway.write_log("Market dont have " + req.symbol)
             return
 
+        amountS = 0
+        amountB = 0
+        tokenSid = 0
+        tokenBid = 0
+
+        # buy
+        if req.direction == Direction.LONG:
+            contractS = self.contracts[bsStr[1]]
+            contractB = self.contracts[bsStr[0]]
+            amountS = 10 ** contractS.decimals * req.price * req.volume
+            amountB = 10 ** contractB.decimals * req.volume
+            tokenSid = contractS.tokenId
+            tokenBid = contractB.tokenId
+        # sell
+        elif req.direction == Direction.SHORT:
+            contractS = self.contracts[bsStr[0]]
+            contractB = self.contracts[bsStr[1]]
+            amountS = 10 ** contractS.decimals * req.volume
+            amountB = 10 ** contractB.decimals * req.price * req.volume
+            tokenSid = contractS.tokenId
+            tokenBid = contractB.tokenId
+        else:
+            self.gateway.write_log("Unknowm direction:" + req.direction)
+            return
+
         orderid = str(self.connect_time + self._new_order_id())
         order = req.create_order_data(
             orderid,
@@ -404,20 +428,24 @@ class LoopringRestApi(RestClient):
         self.gateway.on_order(order)
 
         exchangeId = 1
-        orderId = self.orderId[0]
+        if tokenSid not in self.orderId:
+            self.gateway.write_log("Can not get order id of token:" + tokenSid)
+            return
 
-        validSince = int(time.time()*1000)
+        orderId = self.orderId[tokenSid]
+
+        validSince = int(time.time() * 1000)
         validUntil = validSince + 24 * 60 * 60 * 1000
         maxFeeBips = 20
         allOrNone = 1
-        buy = 1
+        buy = req.direction == Direction.LONG
 
         msg_parts = [
             FQ(int(exchangeId), 1 << 32), FQ(int(orderId), 1 << 20),
             FQ(int(self.accountId), 1 << 20),
             FQ(int(self.publicKeyX), 1 << 254), FQ(int(self.publicKeyY), 1 << 254),
-            FQ(int(self.lrcTokenId), 1 << 8), FQ(int(self.lrcTokenId), 1 << 8),
-            FQ(int(req.volume), 1 << 96), FQ(int(req.volume), 1 << 96),
+            FQ(int(tokenSid), 1 << 8), FQ(int(tokenBid), 1 << 8),
+            FQ(int(amountS), 1 << 96), FQ(int(amountB), 1 << 96),
             FQ(int(allOrNone), 1 << 1), FQ(int(validSince), 1 << 32), FQ(int(validUntil), 1 << 32),
             FQ(int(maxFeeBips), 1 << 6),
             FQ(int(buy), 1 << 1)
@@ -433,10 +461,10 @@ class LoopringRestApi(RestClient):
             "exchangeId": exchangeId,
             "orderId": orderId,
             "accountId": self.accountId,
-            "tokenSId": 0,
-            "tokenBId": self.lrcTokenId,
-            "amountS": "100000000000000000",
-            "amountB": "100000000000000000000",
+            "tokenSId": tokenSid,
+            "tokenBId": tokenBid,
+            "amountS": str(int(amountS)),
+            "amountB": str(int(amountB)),
             "hash": str(hash),
             "maxFeeBips": maxFeeBips,
             "validSince": validSince,
@@ -477,7 +505,6 @@ class LoopringRestApi(RestClient):
         }
         '''
 
-
         self.gateway.write_log(msg)
 
         headers = {
@@ -489,7 +516,7 @@ class LoopringRestApi(RestClient):
             path="/api/v1/order",
             callback=self.on_send_order,
             data=json.dumps(msg),
-            #params=params,
+            # params=params,
             headers=headers,
             extra=order,
             on_error=self.on_send_order_error,
@@ -587,7 +614,6 @@ class LoopringRestApi(RestClient):
         self.publicKeyY = account_data['publicKeyY']
         self.key = account_data['apiKey']
 
-
         self.gateway.write_log("账户信息查询成功")
 
         self.gateway.write_log("start query_balance")
@@ -606,7 +632,7 @@ class LoopringRestApi(RestClient):
             tokenAmount = balance['totalAmount']
             frozenAmount = balance['frozenAmount']
 
-            #self.gateway.on_account(balance)
+            # self.gateway.on_account(balance)
 
         self.gateway.write_log("账户余额查询成功")
 
@@ -668,7 +694,6 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("on_query_contract:")
         self.gateway.write_log(data)
         for d in data["tokens"]:
-
             contract = ContractData(
                 symbol=d["symbol"],
                 name=d["symbol"],
@@ -696,6 +721,11 @@ class LoopringRestApi(RestClient):
 
         self.orderHash.append(data['orderHash'])
 
+        # add token order Id
+        tokenSid = data['tokenSId']
+        if tokenSid in self.orderId:
+            self.orderId[tokenSid] = self.orderId[tokenSid] + 1
+
         order = request.extra
         order.status = Status.NOTTRADED
         self.clientOrderMap[order.orderid] = data['orderHash']
@@ -718,7 +748,7 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log(msg)
 
     def on_send_order_error(
-        self, exception_type: type, exception_value: Exception, tb, request: Request
+            self, exception_type: type, exception_value: Exception, tb, request: Request
     ):
         """
         Callback when sending order caused exception.
@@ -779,13 +809,13 @@ class LoopringRestApi(RestClient):
                 "symbol": req.symbol,
                 "interval": INTERVAL_VT2LOOPRING[req.interval],
                 "limit": limit,
-                "startTime": start_time * 1000,         # convert to millisecond
+                "startTime": start_time * 1000,  # convert to millisecond
             }
-            
+
             # Add end time if specified
             if req.end:
                 end_time = int(datetime.timestamp(req.end))
-                params["endTime"] = end_time * 1000     # convert to millisecond
+                params["endTime"] = end_time * 1000  # convert to millisecond
 
             # Get response from server
             resp = self.request(
@@ -808,9 +838,9 @@ class LoopringRestApi(RestClient):
                     break
 
                 buf = []
-                
+
                 for l in data:
-                    dt = datetime.fromtimestamp(l[0] / 1000)    # convert to second
+                    dt = datetime.fromtimestamp(l[0] / 1000)  # convert to second
 
                     bar = BarData(
                         symbol=req.symbol,
@@ -884,7 +914,7 @@ class LoopringTradeWebsocketApi(WebsocketClient):
                 frozen=float(d["l"]),
                 gateway_name=self.gateway_name
             )
-            
+
             if account.balance:
                 self.gateway.on_account(account)
 
@@ -983,7 +1013,7 @@ class LoopringDataWebsocketApi(WebsocketClient):
         '''
 
         # Close previous connection
-        #if self._active:
+        # if self._active:
         #    self.stop()
         #    self.join()
 
