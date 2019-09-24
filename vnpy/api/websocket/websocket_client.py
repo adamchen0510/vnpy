@@ -182,7 +182,8 @@ class WebsocketClient(object):
                             data = self.unpack_data(text)
                         except ValueError as e:
                             print("websocket unable to parse data: " + text)
-                            raise e
+                            # raise e
+                            data = text
 
                         self.on_packet(data)
                 # ws is closed before recv function is called
