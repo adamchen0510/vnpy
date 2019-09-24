@@ -434,8 +434,8 @@ class LoopringRestApi(RestClient):
 
         orderId = self.orderId[tokenSid]
 
-        validSince = int(time.time() * 1000)
-        validUntil = validSince + 24 * 60 * 60 * 1000
+        validSince = int(time.time())
+        validUntil = validSince + 24 * 60 * 60
         maxFeeBips = 20
         allOrNone = 1
         buy = req.direction == Direction.LONG
@@ -631,8 +631,13 @@ class LoopringRestApi(RestClient):
             tokenId = balance['tokenId']
             tokenAmount = balance['totalAmount']
             frozenAmount = balance['frozenAmount']
-
-            # self.gateway.on_account(balance)
+            account = AccountData(
+                accountid=accountId,
+                balance=float(tokenAmount)/(10**18),	# TODO: decimals
+                frozen=float(frozenAmount)/(10**18),
+                gateway_name=self.gateway_name
+            )
+            self.gateway.on_account(account)
 
         self.gateway.write_log("账户余额查询成功")
 
