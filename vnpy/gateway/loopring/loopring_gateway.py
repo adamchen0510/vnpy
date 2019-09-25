@@ -88,7 +88,6 @@ class Security(Enum):
 
 symbol_name_map = {}
 
-
 class LoopringGateway(BaseGateway):
     """
     VN Trader Gateway for Loopring connection.
@@ -287,8 +286,8 @@ class LoopringRestApi(RestClient):
         self.gateway.write_log("start query_contract")
         self.query_contract()
         # self.start_user_stream()
-        # self.gateway.write_log("trade_ws_api connect")
-        # self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
+        self.gateway.write_log("trade_ws_api connect")
+        self.trade_ws_api.connect(WEBSOCKET_DATA_HOST, self.proxy_host, self.proxy_port)
 
     def query_time(self):
         """"""
@@ -901,6 +900,16 @@ class LoopringTradeWebsocketApi(WebsocketClient):
     def on_connected(self):
         """"""
         self.gateway.write_log("交易Websocket API连接成功")
+        # subscribe
+        channels = {
+            "op": "sub",
+            "apiKey": self.gateway.rest_api.key,
+            "args": [
+                "account",
+                "order&LRC-ETH"
+            ]
+        }
+        self.send_packet(channels)
 
     def on_packet(self, packet: dict):  # type: (dict)->None
         self.gateway.write_log("交易on_packet")
@@ -909,46 +918,57 @@ class LoopringTradeWebsocketApi(WebsocketClient):
         if packet == "ping":
             return
 
-        if packet["e"] == "outboundAccountInfo":
-            self.on_account(packet)
-        else:
-            self.on_order(packet)
+        jsonData = json.loads(json.dumps(eval(str(packet))))
+        if 'result' in jsonData:
+            result = jsonData['result']
+            status = result['status']
+            if status != 'ok':
+                self.gateway.write_log("Error status:" + status)
+                result
+
+        if "topic" in jsonData:
+            topic = jsonData['topic']
+            if topic == "account":
+                self.on_account(jsonData)
+            else:
+                self.on_order(jsonData)
 
     def on_account(self, packet):
+        self.gateway.write_log("交易on_account")
+        self.gateway.write_log(packet)
         """"""
-        for d in packet["B"]:
-            account = AccountData(
-                accountid=d["a"],
-                balance=float(d["f"]) + float(d["l"]),
-                frozen=float(d["l"]),
-                gateway_name=self.gateway_name
-            )
+        d = packet["data"]
+        account = AccountData(
+            accountid=self.gateway.rest_api.contracts[d["token"]].tokenId,
+            balance=float(d["balance"])/(10**18),   # TODO: decimals
+            frozen=float(d["lock"])/(10**18),
+            gateway_name=self.gateway_name
+        )
 
-            if account.balance:
-                self.gateway.on_account(account)
+        if account.balance:
+            self.gateway.on_account(account)
 
-    def on_order(self, packet: dict):
+    def on_order(self, packet):
         self.gateway.write_log("交易on_order")
         self.gateway.write_log(packet)
         """"""
-        dt = datetime.fromtimestamp(packet["O"] / 1000)
+        dt = datetime.fromtimestamp(packet["ts"] / 1000)
         time = dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        if packet["C"] == "null":
-            orderid = packet["c"]
-        else:
-            orderid = packet["C"]
+        data = packet["data"]
+
+        orderid = data["clientOrderId"]
 
         order = OrderData(
-            symbol=packet["s"],
+            symbol=data["market"],
             exchange=Exchange.LOOPRING,
             orderid=orderid,
-            type=ORDERTYPE_LOOPRING2VT[packet["o"]],
-            direction=DIRECTION_LOOPRING2VT[packet["S"]],
-            price=float(packet["p"]),
-            volume=float(packet["q"]),
-            traded=float(packet["z"]),
-            status=STATUS_LOOPRING2VT[packet["X"]],
+            #type=ORDERTYPE_LOOPRING2VT[data["o"]],
+            direction=DIRECTION_LOOPRING2VT[data["side"]],
+            price=float(data["price"]),
+            volume=float(data["volume"])/(10**18),    # TODO: decimals
+            #traded=float(data["filledSize"])/(10**18),
+            status=STATUS_LOOPRING2VT[data["status"]],
             time=time,
             gateway_name=self.gateway_name
         )
@@ -956,20 +976,23 @@ class LoopringTradeWebsocketApi(WebsocketClient):
         self.gateway.on_order(order)
 
         # Push trade event
-        trade_volume = float(packet["l"])
+        if "filledVolume" not in data:
+            return
+
+        trade_volume = float(data["filledVolume"])/(10**18)
         if not trade_volume:
             return
 
-        trade_dt = datetime.fromtimestamp(packet["T"] / 1000)
+        trade_dt = datetime.fromtimestamp(float(data["updatedAt"]) / 1000)
         trade_time = trade_dt.strftime("%Y-%m-%d %H:%M:%S")
 
         trade = TradeData(
             symbol=order.symbol,
             exchange=order.exchange,
             orderid=order.orderid,
-            tradeid=packet["t"],
+            tradeid=order.orderid,
             direction=order.direction,
-            price=float(packet["L"]),
+            price=order.price,
             volume=trade_volume,
             time=trade_time,
             gateway_name=self.gateway_name,
