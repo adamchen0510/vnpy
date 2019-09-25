@@ -959,6 +959,10 @@ class LoopringTradeWebsocketApi(WebsocketClient):
 
         orderid = data["clientOrderId"]
 
+        status = data["status"]
+        if status == "ORDER_STATUS_PROCESSING" and "filledSize" in data:
+            status = "ORDER_STATUS_PARTIALLY_FILLED"
+
         order = OrderData(
             symbol=data["market"],
             exchange=Exchange.LOOPRING,
@@ -966,9 +970,9 @@ class LoopringTradeWebsocketApi(WebsocketClient):
             #type=ORDERTYPE_LOOPRING2VT[data["o"]],
             direction=DIRECTION_LOOPRING2VT[data["side"]],
             price=float(data["price"]),
-            volume=float(data["volume"])/(10**18),    # TODO: decimals
+            volume=float(data["size"])/(10**18),    # TODO: decimals
             #traded=float(data["filledSize"])/(10**18),
-            status=STATUS_LOOPRING2VT[data["status"]],
+            status=STATUS_LOOPRING2VT[status],
             time=time,
             gateway_name=self.gateway_name
         )
@@ -976,10 +980,10 @@ class LoopringTradeWebsocketApi(WebsocketClient):
         self.gateway.on_order(order)
 
         # Push trade event
-        if "filledVolume" not in data:
+        if "filledSize" not in data:
             return
 
-        trade_volume = float(data["filledVolume"])/(10**18)
+        trade_volume = float(data["filledSize"])/(10**18)   # TODO: decimals
         if not trade_volume:
             return
 
