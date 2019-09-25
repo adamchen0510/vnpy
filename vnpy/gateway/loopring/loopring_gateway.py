@@ -48,7 +48,7 @@ WEBSOCKET_DATA_HOST = "ws://13.231.113.1:31610/v1/ws"
 STATUS_LOOPRING2VT = {
     "ORDER_STATUS_PROCESSING": Status.NOTTRADED,
     "ORDER_STATUS_PARTIALLY_FILLED": Status.PARTTRADED,
-    "ORDER_STATUS_FILLED": Status.ALLTRADED,
+    "ORDER_STATUS_PROCESSED": Status.ALLTRADED,
     "ORDER_STATUS_CANCELLING": Status.CANCELLING,
     "ORDER_STATUS_CANCELLED": Status.CANCELLED,
     "ORDER_STATUS_REJECTED": Status.REJECTED,
@@ -113,7 +113,7 @@ class LoopringGateway(BaseGateway):
         self.market_ws_api = LoopringDataWebsocketApi(self)
         self.rest_api = LoopringRestApi(self)
 
-        self.event_engine.register(EVENT_TIMER, self.process_timer_event)
+        # self.event_engine.register(EVENT_TIMER, self.process_timer_event)
 
     def connect(self, setting: dict):
         """"""
@@ -419,6 +419,10 @@ class LoopringRestApi(RestClient):
             self.gateway.write_log("Unknowm direction:" + req.direction)
             return
 
+        #if tokenSid not in self.orderId:
+        #    self.gateway.write_log("Can not get order id of token:" + str(tokenSid))
+        #    return
+
         orderid = str(self.connect_time + self._new_order_id())
         order = req.create_order_data(
             orderid,
@@ -428,14 +432,11 @@ class LoopringRestApi(RestClient):
         self.gateway.on_order(order)
 
         exchangeId = 1
-        if tokenSid not in self.orderId:
-            self.gateway.write_log("Can not get order id of token:" + tokenSid)
-            return
 
         orderId = self.orderId[tokenSid]
 
         validSince = int(time.time())
-        validUntil = validSince + 24 * 60 * 60
+        validUntil = validSince + 30 * 24 * 60 * 60
         maxFeeBips = 20
         allOrNone = 1
         buy = req.direction == Direction.LONG
@@ -632,7 +633,7 @@ class LoopringRestApi(RestClient):
             tokenAmount = balance['totalAmount']
             frozenAmount = balance['frozenAmount']
             account = AccountData(
-                accountid=accountId,
+                accountid=tokenId,
                 balance=float(tokenAmount)/(10**18),	# TODO: decimals
                 frozen=float(frozenAmount)/(10**18),
                 gateway_name=self.gateway_name
@@ -731,8 +732,8 @@ class LoopringRestApi(RestClient):
         # add token order Id
         jsonData = json.loads(request.data)
         tokenSid = jsonData['tokenSId']
-        if tokenSid in self.orderId:
-            self.orderId[tokenSid] = self.orderId[tokenSid] + 1
+        #if tokenSid in self.orderId:
+        self.orderId[tokenSid] = self.orderId[tokenSid] + 1
 
         order = request.extra
         order.status = Status.NOTTRADED
