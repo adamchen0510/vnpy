@@ -1,10 +1,10 @@
 import grpc
 # from io.lightcone.services.crypto_service import service_crypto_pb2, service_crypto_pb2_grpc
-import service_crypto_pb2 as service__crypto__pb2
-import service_crypto_pb2_grpc as service__crypto__pb2__grpc
-import data_order_pb2 as data__order__pb2
-import data_types_pb2 as data__types__pb2
-import data_types_pb2 as data__types__pb2
+import lib.service_crypto_pb2 as service__crypto__pb2
+import lib.service_crypto_pb2_grpc as service__crypto__pb2__grpc
+import lib.data_order_pb2 as data__order__pb2
+import lib.data_types_pb2 as data__types__pb2
+import lib.data_types_pb2 as data__types__pb2
 
 _HOST = '192.168.1.167'
 _PORT = '50052'

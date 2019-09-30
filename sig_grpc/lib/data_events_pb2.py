@@ -13,10 +13,10 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-import data_types_pb2 as data__types__pb2
-import data_order_pb2 as data__order__pb2
-import ethereum_pb2 as ethereum__pb2
-import data_user_transaction_pb2 as data__user__transaction__pb2
+import lib.data_types_pb2 as data__types__pb2
+import lib.data_order_pb2 as data__order__pb2
+import lib.ethereum_pb2 as ethereum__pb2
+import lib.data_user_transaction_pb2 as data__user__transaction__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
