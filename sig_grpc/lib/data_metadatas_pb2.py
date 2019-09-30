@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
-import data_types_pb2 as data__types__pb2
+import lib.data_types_pb2 as data__types__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(

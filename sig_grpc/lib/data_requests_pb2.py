@@ -15,12 +15,12 @@ _sym_db = _symbol_database.Default()
 
 
 from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
-import data_types_pb2 as data__types__pb2
-import data_events_pb2 as data__events__pb2
-import data_order_pb2 as data__order__pb2
-import data_merkle_tree_pb2 as data__merkle__tree__pb2
-import data_metadatas_pb2 as data__metadatas__pb2
-import data_accounts_pb2 as data__accounts__pb2
+import lib.data_types_pb2 as data__types__pb2
+import lib.data_events_pb2 as data__events__pb2
+import lib.data_order_pb2 as data__order__pb2
+import lib.data_merkle_tree_pb2 as data__merkle__tree__pb2
+import lib.data_metadatas_pb2 as data__metadatas__pb2
+import lib.data_accounts_pb2 as data__accounts__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
