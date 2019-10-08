@@ -11,7 +11,9 @@ from vnpy.trader.engine import MainEngine
 
 from vnpy.gateway.loopring import LoopringGateway
 from vnpy.gateway.binance import BinanceGateway
+from vnpy.gateway.okex import OkexGateway
 from vnpy.app.cta_strategy import CtaStrategyApp
+from vnpy.app.algo_trading import AlgoTradingApp
 from vnpy.app.cta_strategy.base import EVENT_CTA_LOG
 
 SETTINGS["log.active"] = True
@@ -36,8 +38,17 @@ binance_setting = {
     "key": "ns0MVIw7mTg1ZLp3wxrpIwaRk9aT4RxXZaIh5Z1Kz7jGTxVpuw9OVsYX4DjkyQVK",
     "secret": "dlYFBM4X23XqiYe1fv9Gzz0veMQlyoPvdzUiMOrbBJ9B9i6klAKijxho9WtdbvWh",
     "session_number": 3,
-    "proxy_host": "192.168.1.167",
-    "proxy_port": 1080
+    "proxy_host": "", #"192.168.1.167",
+    "proxy_port": ""  #1080
+}
+
+okex_setting = {
+    "API Key": "a7fb2952-7291-405f-844f-dcc98b0c08ac",
+    "Secret Key": "4B74BCFC138AA38F3F67B8E7F9BDAF3E",
+    "Passphrase": "cs380811",
+    "会话数": 3,
+    "代理地址": "",
+    "代理端口": "",
 }
 
 
@@ -51,15 +62,18 @@ def run_child():
     main_engine = MainEngine(event_engine)
     main_engine.add_gateway(LoopringGateway)
     main_engine.add_gateway(BinanceGateway)
+    main_engine.add_gateway(OkexGateway)
     cta_engine = main_engine.add_app(CtaStrategyApp)
+    #cta_engine = main_engine.add_app(AlgoTradingApp)
     main_engine.write_log("主引擎创建成功")
 
     log_engine = main_engine.get_engine("log")
     event_engine.register(EVENT_CTA_LOG, log_engine.process_log_event)
     main_engine.write_log("注册日志事件监听")
 
-    main_engine.connect(loopring_setting, "LOOPRING")
-    # main_engine.connect(binance_setting, "BINANCE")
+    # main_engine.connect(loopring_setting, "LOOPRING")
+    main_engine.connect(binance_setting, "BINANCE")
+    main_engine.connect(okex_setting, "OKEX")
     main_engine.write_log("连接CTP接口")
 
     '''
@@ -74,7 +88,6 @@ def run_child():
         type=OrderType.LIMIT
     )
     main_engine.send_order(reqeust_order, "LOOPRING")
-
     sleep(10)
     # cancel order
     cancel_order = CancelRequest(
@@ -83,7 +96,6 @@ def run_child():
         orderid="0"
     )
     main_engine.cancel_order(cancel_order, "LOOPRING")
-    '''
 
     sleep(5)
     req = SubscribeRequest(
@@ -91,6 +103,7 @@ def run_child():
         exchange=Exchange.LOOPRING
     )
     main_engine.subscribe(req, "LOOPRING")
+    '''
 
     sleep(5)
 
