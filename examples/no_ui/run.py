@@ -96,14 +96,21 @@ def run_child():
         orderid="0"
     )
     main_engine.cancel_order(cancel_order, "LOOPRING")
-
-    sleep(5)
-    req = SubscribeRequest(
-        symbol="LRC",
-        exchange=Exchange.LOOPRING
-    )
-    main_engine.subscribe(req, "LOOPRING")
     '''
+
+    sleep(10)
+    req = SubscribeRequest(
+        symbol="LRCETH",
+        exchange=Exchange.BINANCE
+    )
+    main_engine.subscribe(req, "BINANCE")
+
+    sleep(2)
+    req = SubscribeRequest(
+        symbol="LRC-ETH",
+        exchange=Exchange.OKEX
+    )
+    main_engine.subscribe(req, "OKEX")
 
     sleep(5)
 
@@ -169,4 +176,5 @@ def run_parent():
 
 
 if __name__ == "__main__":
-    run_parent()
+    #run_parent()
+    run_child()

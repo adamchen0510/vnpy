@@ -149,11 +149,17 @@ class CtaEngine(BaseEngine):
 
     def process_tick_event(self, event: Event):
         """"""
+        self.write_log("engine: process_tick_event")
         tick = event.data
 
         strategies = self.symbol_strategy_map[tick.vt_symbol]
         if not strategies:
-            return
+            for symbol_strategy in self.symbol_strategy_map:
+                if symbol_strategy.find(tick.vt_symbol) >= 0:
+                    strategies = self.symbol_strategy_map[symbol_strategy]
+                    break
+            if not strategies:
+                return
 
         self.check_stop_order(tick)
 
@@ -162,6 +168,7 @@ class CtaEngine(BaseEngine):
                 self.call_strategy_func(strategy, strategy.on_tick, tick)
 
     def process_order_event(self, event: Event):
+        self.write_log("engine: process_order_event")
         """"""
         order = event.data
         
@@ -195,6 +202,7 @@ class CtaEngine(BaseEngine):
         self.call_strategy_func(strategy, strategy.on_order, order)
 
     def process_trade_event(self, event: Event):
+        self.write_log("engine: process_trade_event")
         """"""
         trade = event.data
 
@@ -224,6 +232,7 @@ class CtaEngine(BaseEngine):
         self.put_strategy_event(strategy)
 
     def process_position_event(self, event: Event):
+        self.write_log("engine: process_position_event")
         """"""
         position = event.data
 
@@ -508,50 +517,53 @@ class CtaEngine(BaseEngine):
 
     def load_bar(
         self, 
-        vt_symbol: str, 
+        vt_symbols: str,
         days: int, 
         interval: Interval,
         callback: Callable[[BarData], None]
     ):
         """"""
-        symbol, exchange = extract_vt_symbol(vt_symbol)
-        end = datetime.now()
-        start = end - timedelta(days)
+        self.write_log("load_bar")
+        for vt_symbol in vt_symbols.split(","):
+            symbol, exchange = extract_vt_symbol(vt_symbol)
+            end = datetime.now()
+            start = end - timedelta(days)
 
-        # Query bars from RQData by default, if not found, load from database.
-        bars = self.query_bar_from_rq(symbol, exchange, interval, start, end)
-        if not bars:
-            bars = database_manager.load_bar_data(
-                symbol=symbol,
-                exchange=exchange,
-                interval=interval,
-                start=start,
-                end=end,
-            )
+            # Query bars from RQData by default, if not found, load from database.
+            bars = self.query_bar_from_rq(symbol, exchange, interval, start, end)
+            if not bars:
+                bars = database_manager.load_bar_data(
+                    symbol=symbol,
+                    exchange=exchange,
+                    interval=interval,
+                    start=start,
+                    end=end,
+                )
 
-        for bar in bars:
-            callback(bar)
+            for bar in bars:
+                callback(bar)
 
     def load_tick(
         self, 
-        vt_symbol: str,
+        vt_symbols: str,
         days: int,
         callback: Callable[[TickData], None]
     ):
         """"""
-        symbol, exchange = extract_vt_symbol(vt_symbol)
-        end = datetime.now()
-        start = end - timedelta(days)
+        for vt_symbol in vt_symbols.split(","):
+            symbol, exchange = extract_vt_symbol(vt_symbol)
+            end = datetime.now()
+            start = end - timedelta(days)
 
-        ticks = database_manager.load_tick_data(
-            symbol=symbol,
-            exchange=exchange,
-            start=start,
-            end=end,
-        )
+            ticks = database_manager.load_tick_data(
+                symbol=symbol,
+                exchange=exchange,
+                start=start,
+                end=end,
+            )
 
-        for tick in ticks:
-            callback(tick)
+            for tick in ticks:
+                callback(tick)
 
     def call_strategy_func(
         self, strategy: CtaTemplate, func: Callable, params: Any = None
@@ -633,14 +645,15 @@ class CtaEngine(BaseEngine):
                     if value:
                         setattr(strategy, name, value)
 
-            # Subscribe market data
-            contract = self.main_engine.get_contract(strategy.vt_symbol)
-            if contract:
-                req = SubscribeRequest(
-                    symbol=contract.symbol, exchange=contract.exchange)
-                self.main_engine.subscribe(req, contract.gateway_name)
-            else:
-                self.write_log(f"行情订阅失败，找不到合约{strategy.vt_symbol}", strategy)
+            for vt_symbol in strategy.vt_symbol.split(","):
+                # Subscribe market data
+                contract = self.main_engine.get_contract(vt_symbol)
+                if contract:
+                    req = SubscribeRequest(
+                        symbol=contract.symbol, exchange=contract.exchange)
+                    self.main_engine.subscribe(req, contract.gateway_name)
+                else:
+                    self.write_log(f"行情订阅失败，找不到合约{vt_symbol}", strategy)
 
             # Put event to update init completed status.
             strategy.inited = True
